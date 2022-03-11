@@ -15,8 +15,9 @@
 
 ## Notice
 
-- If using both wildcards topics (`mqtt/#`, `mqtt/+`) and exact-match topics (`mqtt/1`) can cause problems with duplicate messages being received.
+- If using both wildcards topics (`mqtt/#`, `mqtt/+`) and exact-match topics (`mqtt/1`) can cause problems with
+  duplicate messages being received.
 
 ## How to use
 
-see [mqtt demo](https://git.futurenotfound.top/liuzhuoming/mqtt-demo)
+see [mqtt demo](https://github.com/ming-lz/mqtt-demo)
