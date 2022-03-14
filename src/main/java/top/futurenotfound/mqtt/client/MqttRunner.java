@@ -3,6 +3,7 @@ package top.futurenotfound.mqtt.client;
 import lombok.AllArgsConstructor;
 import org.eclipse.paho.mqttv5.client.MqttClient;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.mqttv5.common.util.MqttTopicValidator;
 import org.reflections.Reflections;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
@@ -11,6 +12,7 @@ import top.futurenotfound.mqtt.client.env.MqttSharedSubscriptionType;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.util.HashSet;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -30,6 +32,7 @@ public class MqttRunner implements CommandLineRunner {
     private final MqttClient mqttClient;
     private final SharedSubscriptionStore sharedSubscriptionStore;
     private final QueuedSubscriptionStore queuedSubscriptionStore;
+    private final OtherSubscriptionStore otherSubscriptionStore;
 
     @Override
     public void run(String... args) throws Exception {
@@ -39,6 +42,7 @@ public class MqttRunner implements CommandLineRunner {
 
         Set<Class<?>> classSet = annotated.stream().filter(subTypes::contains).collect(Collectors.toSet());
 
+        Set<String> allFilterSet = new HashSet<>();
         for (Class<?> clazz : classSet) {
             Subscribe annotation = clazz.getAnnotation(Subscribe.class);
             String[] topics = annotation.topics();
@@ -46,7 +50,21 @@ public class MqttRunner implements CommandLineRunner {
 
             Method subMethod = clazz.getMethod("onMessage", String.class, MqttMessage.class);
 
+            Set<String> filterSet = new HashSet<>();
+            //exact-match topics first
             for (String topic : topics) {
+                if (!topic.contains("#") && !topic.contains("+")) {
+                    storeOtherSubscription(allFilterSet, filterSet, topic, subMethod, clazz);
+                }
+            }
+            //wildcards topic
+            for (String topic : topics) {
+                if (topic.contains("#") || topic.contains("+")) {
+                    storeOtherSubscription(allFilterSet, filterSet, topic, subMethod, clazz);
+                }
+            }
+
+            for (String topic : filterSet) {
                 if (topic.startsWith(MqttSharedSubscriptionType.QUEUE.getPrefix())
                         || topic.startsWith(MqttSharedSubscriptionType.SHARE.getPrefix())) {
                     if (topic.startsWith(MqttSharedSubscriptionType.QUEUE.getPrefix())) {
@@ -90,11 +108,31 @@ public class MqttRunner implements CommandLineRunner {
                         mqttClient.subscribe(newTopic, qos);
                     }
                 } else {
-                    mqttClient.subscribe(
-                            topic, qos,
-                            (actualTopic, message) -> subMethod.invoke(clazz.newInstance(), actualTopic, message));
+                    mqttClient.subscribe(topic, qos);
                 }
             }
+        }
+    }
+
+    private void storeOtherSubscription(Set<String> allFilterSet, Set<String> filterSet, String topic, Method subMethod, Class<?> clazz) {
+        Set<Consumer<MqttMessage>> consumerSet = otherSubscriptionStore.get(topic);
+        if (consumerSet == null) {
+            otherSubscriptionStore.put(topic, new CopyOnWriteArraySet<>());
+        }
+        otherSubscriptionStore.get(topic).add(message -> {
+            try {
+                subMethod.invoke(clazz.newInstance(), topic, message);
+            } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
+                e.printStackTrace();
+            }
+        });
+
+        long count = allFilterSet.stream()
+                .filter(filter -> MqttTopicValidator.isMatched(topic, filter))
+                .count();
+        if (count == 0) {
+            filterSet.add(topic);
+            allFilterSet.add(topic);
         }
     }
 }

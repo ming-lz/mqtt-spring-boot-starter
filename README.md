@@ -15,8 +15,8 @@
 
 ## Notice
 
-- If using both wildcards topics (`mqtt/#`, `mqtt/+`) and exact-match topics (`mqtt/1`) can cause problems with
-  duplicate messages being received.
+- ~~If using both wildcards topics (`mqtt/#`, `mqtt/+`) and exact-match topics (`mqtt/1`) can cause problems with
+  duplicate messages being received.~~
 
 ## How to use
 

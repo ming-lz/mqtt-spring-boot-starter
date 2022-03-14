@@ -7,6 +7,7 @@ import org.eclipse.paho.mqttv5.client.MqttCallback;
 import org.eclipse.paho.mqttv5.client.MqttDisconnectResponse;
 import org.eclipse.paho.mqttv5.common.MqttException;
 import org.eclipse.paho.mqttv5.common.MqttMessage;
+import org.eclipse.paho.mqttv5.common.util.MqttTopicValidator;
 import org.springframework.context.annotation.Configuration;
 
 import java.util.*;
@@ -26,6 +27,7 @@ public class MqttClientCallback implements MqttCallback {
 
     private final SharedSubscriptionStore sharedSubscriptionStore;
     private final QueuedSubscriptionStore queuedSubscriptionStore;
+    private final OtherSubscriptionStore otherSubscriptionStore;
 
     @Override
     public void disconnected(MqttDisconnectResponse disconnectResponse) {
@@ -55,6 +57,10 @@ public class MqttClientCallback implements MqttCallback {
                 consumer.accept(message);
             }
         }
+        //handle other subscription
+        otherSubscriptionStore.entrySet().stream()
+                .filter(entry -> MqttTopicValidator.isMatched(entry.getKey(), topic))
+                .forEach(entry -> entry.getValue().forEach(consumer -> consumer.accept(message)));
     }
 
     private <T> T randomElement(Collection<T> collection) {
