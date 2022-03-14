@@ -10,7 +10,10 @@ import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.eclipse.paho.mqttv5.common.util.MqttTopicValidator;
 import org.springframework.context.annotation.Configuration;
 
-import java.util.*;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Random;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
@@ -28,17 +31,6 @@ public class MqttClientCallback implements MqttCallback {
     private final SharedSubscriptionStore sharedSubscriptionStore;
     private final QueuedSubscriptionStore queuedSubscriptionStore;
     private final OtherSubscriptionStore otherSubscriptionStore;
-
-    @Override
-    public void disconnected(MqttDisconnectResponse disconnectResponse) {
-        log.info("Mqtt server disconnected");
-    }
-
-    @Override
-    public void mqttErrorOccurred(MqttException exception) {
-        exception.printStackTrace();
-        log.info("Mqtt server mqttErrorOccurred");
-    }
 
     @Override
     public void messageArrived(String topic, MqttMessage message) throws Exception {
@@ -64,10 +56,20 @@ public class MqttClientCallback implements MqttCallback {
     }
 
     private <T> T randomElement(Collection<T> collection) {
-        Optional<T> optional = collection.stream()
+        return collection.stream()
                 .skip(new Random().nextInt(collection.size()))
-                .findFirst();
-        return optional.get();
+                .findFirst().get();
+    }
+
+    @Override
+    public void disconnected(MqttDisconnectResponse disconnectResponse) {
+        log.info("Mqtt server disconnected");
+    }
+
+    @Override
+    public void mqttErrorOccurred(MqttException exception) {
+        exception.printStackTrace();
+        log.info("Mqtt server mqttErrorOccurred");
     }
 
     @Override

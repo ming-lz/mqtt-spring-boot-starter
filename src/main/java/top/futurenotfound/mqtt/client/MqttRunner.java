@@ -12,7 +12,8 @@ import top.futurenotfound.mqtt.client.env.MqttSharedSubscriptionType;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
-import java.util.HashSet;
+import java.util.HashMap;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArraySet;
@@ -40,99 +41,85 @@ public class MqttRunner implements CommandLineRunner {
         Set<Class<? extends SubscribeHandler>> subTypes = reflections.getSubTypesOf(SubscribeHandler.class);
         Set<Class<?>> annotated = reflections.getTypesAnnotatedWith(Subscribe.class);
 
-        Set<Class<?>> classSet = annotated.stream().filter(subTypes::contains).collect(Collectors.toSet());
+        Set<Class<?>> classSet = annotated.stream()
+                .filter(subTypes::contains)
+                .collect(Collectors.toSet());
 
-        Set<String> allFilterSet = new HashSet<>();
+        Map<String, Consumer<MqttMessage>> consumerHashMap = new HashMap<>();
+
+        Map<String, Consumer<MqttMessage>> exactMatchConsumerMap = new HashMap<>();
+        Map<String, Consumer<MqttMessage>> wildcardsConsumerMap = new HashMap<>();
+
         for (Class<?> clazz : classSet) {
             Subscribe annotation = clazz.getAnnotation(Subscribe.class);
             String[] topics = annotation.topics();
-            int qos = annotation.qos();
 
             Method subMethod = clazz.getMethod("onMessage", String.class, MqttMessage.class);
 
-            Set<String> filterSet = new HashSet<>();
-            //exact-match topics first
             for (String topic : topics) {
                 if (!topic.contains("#") && !topic.contains("+")) {
-                    storeOtherSubscription(allFilterSet, filterSet, topic, subMethod, clazz);
-                }
-            }
-            //wildcards topic
-            for (String topic : topics) {
-                if (topic.contains("#") || topic.contains("+")) {
-                    storeOtherSubscription(allFilterSet, filterSet, topic, subMethod, clazz);
-                }
-            }
-
-            for (String topic : filterSet) {
-                if (topic.startsWith(MqttSharedSubscriptionType.QUEUE.getPrefix())
-                        || topic.startsWith(MqttSharedSubscriptionType.SHARE.getPrefix())) {
-                    if (topic.startsWith(MqttSharedSubscriptionType.QUEUE.getPrefix())) {
-                        final String newTopic = topic.substring(MqttSharedSubscriptionType.QUEUE.getPrefix().length());
-
-                        Set<Consumer<MqttMessage>> consumerSet = queuedSubscriptionStore.get(newTopic);
-                        if (consumerSet == null) {
-                            queuedSubscriptionStore.put(newTopic, new CopyOnWriteArraySet<>());
-                        }
-                        consumerSet = queuedSubscriptionStore.get(newTopic);
-                        consumerSet.add(message -> {
-                            try {
-                                subMethod.invoke(clazz.newInstance(), newTopic, message);
-                            } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
-                                e.printStackTrace();
-                            }
-                        });
-                        mqttClient.subscribe(newTopic, qos);
-                    } else if (topic.startsWith(MqttSharedSubscriptionType.SHARE.getPrefix())) {
-                        final String newTopic = topic.substring(topic.indexOf("/", MqttSharedSubscriptionType.SHARE.getPrefix().length()) + 1);
-                        final String group = topic.substring(MqttSharedSubscriptionType.SHARE.getPrefix().length(),
-                                topic.indexOf("/", MqttSharedSubscriptionType.SHARE.getPrefix().length()));
-
-                        ConcurrentHashMap<String, Set<Consumer<MqttMessage>>> consumerMap = sharedSubscriptionStore.get(newTopic);
-                        if (consumerMap == null) {
-                            sharedSubscriptionStore.put(newTopic, new ConcurrentHashMap<>());
-                        }
-                        consumerMap = sharedSubscriptionStore.get(newTopic);
-                        Set<Consumer<MqttMessage>> consumerSet = consumerMap.get(group);
-                        if (consumerSet == null) {
-                            consumerMap.put(group, new CopyOnWriteArraySet<>());
-                        }
-                        consumerSet = consumerMap.get(group);
-                        consumerSet.add(message -> {
-                            try {
-                                subMethod.invoke(clazz.newInstance(), newTopic, message);
-                            } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
-                                e.printStackTrace();
-                            }
-                        });
-                        mqttClient.subscribe(newTopic, qos);
-                    }
+                    exactMatchConsumerMap.put(topic, consumer(topic, subMethod, clazz));
                 } else {
-                    mqttClient.subscribe(topic, qos);
+                    wildcardsConsumerMap.put(topic, consumer(topic, subMethod, clazz));
                 }
             }
+        }
+
+        //exactMatch first
+        for (Map.Entry<String, Consumer<MqttMessage>> entry : exactMatchConsumerMap.entrySet()) {
+            String topic = entry.getKey();
+            Consumer<MqttMessage> consumer = entry.getValue();
+            storeOtherSubscription(consumerHashMap, topic, consumer);
+        }
+        //wildcards
+        for (Map.Entry<String, Consumer<MqttMessage>> entry : wildcardsConsumerMap.entrySet()) {
+            String topic = entry.getKey();
+            Consumer<MqttMessage> consumer = entry.getValue();
+            storeOtherSubscription(consumerHashMap, topic, consumer);
+        }
+
+        for (Map.Entry<String, Consumer<MqttMessage>> entry : consumerHashMap.entrySet()) {
+            String topic = entry.getKey();
+            Consumer<MqttMessage> consumer = entry.getValue();
+
+            if (topic.startsWith(MqttSharedSubscriptionType.QUEUE.getPrefix())
+                    || topic.startsWith(MqttSharedSubscriptionType.SHARE.getPrefix())) {
+                if (topic.startsWith(MqttSharedSubscriptionType.QUEUE.getPrefix())) {
+                    topic = topic.substring(MqttSharedSubscriptionType.QUEUE.getPrefix().length());
+                    queuedSubscriptionStore.computeIfAbsent(topic, k -> new CopyOnWriteArraySet<>())
+                            .add(consumer);
+                } else if (topic.startsWith(MqttSharedSubscriptionType.SHARE.getPrefix())) {
+                    topic = topic.substring(topic.indexOf("/", MqttSharedSubscriptionType.SHARE.getPrefix().length()) + 1);
+                    String group = topic.substring(MqttSharedSubscriptionType.SHARE.getPrefix().length(),
+                            topic.indexOf("/", MqttSharedSubscriptionType.SHARE.getPrefix().length()));
+                    sharedSubscriptionStore.computeIfAbsent(topic, k -> new ConcurrentHashMap<>())
+                            .computeIfAbsent(group, k -> new CopyOnWriteArraySet<>())
+                            .add(consumer);
+                }
+            }
+            mqttClient.subscribe(topic, 0);
         }
     }
 
-    private void storeOtherSubscription(Set<String> allFilterSet, Set<String> filterSet, String topic, Method subMethod, Class<?> clazz) {
-        Set<Consumer<MqttMessage>> consumerSet = otherSubscriptionStore.get(topic);
-        if (consumerSet == null) {
-            otherSubscriptionStore.put(topic, new CopyOnWriteArraySet<>());
+    private void storeOtherSubscription(Map<String, Consumer<MqttMessage>> consumerHashMap, String topic, Consumer<MqttMessage> consumer) {
+        otherSubscriptionStore.computeIfAbsent(topic, k -> new CopyOnWriteArraySet<>())
+                .add(consumer);
+
+        long count = consumerHashMap.keySet().stream()
+                .filter(filter -> MqttTopicValidator.isMatched(topic, filter))
+                .count();
+        if (count == 0) {
+            consumerHashMap.put(topic, consumer);
         }
-        otherSubscriptionStore.get(topic).add(message -> {
+    }
+
+    private Consumer<MqttMessage> consumer(String topic, Method subMethod, Class<?> clazz) {
+        return message -> {
             try {
                 subMethod.invoke(clazz.newInstance(), topic, message);
             } catch (IllegalAccessException | InvocationTargetException | InstantiationException e) {
                 e.printStackTrace();
             }
-        });
-
-        long count = allFilterSet.stream()
-                .filter(filter -> MqttTopicValidator.isMatched(topic, filter))
-                .count();
-        if (count == 0) {
-            filterSet.add(topic);
-            allFilterSet.add(topic);
-        }
+        };
     }
 }

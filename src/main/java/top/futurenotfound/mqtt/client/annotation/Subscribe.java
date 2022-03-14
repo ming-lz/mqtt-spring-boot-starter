@@ -18,5 +18,5 @@ import java.lang.annotation.Target;
 public @interface Subscribe {
     String[] topics();
 
-    int qos() default 0;
+//    int qos() default 0;
 }
