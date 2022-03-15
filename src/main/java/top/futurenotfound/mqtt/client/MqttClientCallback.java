@@ -52,13 +52,16 @@ public class MqttClientCallback implements MqttCallback {
         //handle other subscription
         otherSubscriptionStore.entrySet().stream()
                 .filter(entry -> MqttTopicValidator.isMatched(entry.getKey(), topic))
-                .forEach(entry -> entry.getValue().forEach(consumer -> consumer.accept(message)));
+                .map(Map.Entry::getValue)
+                .flatMap(Collection::stream)
+                .forEach(consumer -> consumer.accept(message));
     }
 
     private <T> T randomElement(Collection<T> collection) {
+        Random random = new Random();
         return collection.stream()
-                .skip(new Random().nextInt(collection.size()))
-                .findFirst().get();
+                .skip(random.nextInt(collection.size()))
+                .findFirst().orElseThrow(RuntimeException::new);
     }
 
     @Override
