@@ -1,4 +1,4 @@
-package top.futurenotfound.mqtt.client;
+package top.futurenotfound.mqtt.client.store;
 
 import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.springframework.context.annotation.Configuration;

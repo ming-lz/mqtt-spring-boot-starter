@@ -1,4 +1,4 @@
-package top.futurenotfound.mqtt.client;
+package top.futurenotfound.mqtt.client.config;
 
 import lombok.AllArgsConstructor;
 import org.eclipse.paho.mqttv5.client.MqttClient;
@@ -7,8 +7,12 @@ import org.eclipse.paho.mqttv5.common.util.MqttTopicValidator;
 import org.reflections.Reflections;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.context.annotation.Configuration;
+import top.futurenotfound.mqtt.client.SubscribeHandler;
 import top.futurenotfound.mqtt.client.annotation.Subscribe;
 import top.futurenotfound.mqtt.client.env.MqttSharedSubscriptionType;
+import top.futurenotfound.mqtt.client.store.OtherSubscriptionStore;
+import top.futurenotfound.mqtt.client.store.QueuedSubscriptionStore;
+import top.futurenotfound.mqtt.client.store.SharedSubscriptionStore;
 
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;

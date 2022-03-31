@@ -1,4 +1,4 @@
-package top.futurenotfound.mqtt.client;
+package top.futurenotfound.mqtt.client.config;
 
 import lombok.AllArgsConstructor;
 import org.eclipse.paho.mqttv5.client.MqttClient;
@@ -10,7 +10,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.annotation.Order;
+import top.futurenotfound.mqtt.client.client.MqttClientCallback;
+import top.futurenotfound.mqtt.client.client.MqttV5Client;
 import top.futurenotfound.mqtt.client.env.MqttVersion;
+import top.futurenotfound.mqtt.client.exception.MqttV5ClientException;
+import top.futurenotfound.mqtt.client.properties.MqttClientProperties;
 
 import java.nio.charset.StandardCharsets;
 

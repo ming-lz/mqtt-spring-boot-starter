@@ -1,4 +1,4 @@
-package top.futurenotfound.mqtt.client;
+package top.futurenotfound.mqtt.client.exception;
 
 /**
  * mqtt exception

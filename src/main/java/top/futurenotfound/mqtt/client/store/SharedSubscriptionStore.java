@@ -1,4 +1,4 @@
-package top.futurenotfound.mqtt.client;
+package top.futurenotfound.mqtt.client.store;
 
 import org.eclipse.paho.mqttv5.common.MqttMessage;
 import org.springframework.context.annotation.Configuration;
@@ -8,12 +8,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * Queued subscription store
+ * Shared subscription store
  * <p>
- * k=topic,v=list
+ * k=topic,v=(k=group,v=list)
  *
  * @author liuzhuoming
  */
 @Configuration
-public class QueuedSubscriptionStore extends ConcurrentHashMap<String, Set<Consumer<MqttMessage>>> {
+public class SharedSubscriptionStore extends ConcurrentHashMap<String, ConcurrentHashMap<String, Set<Consumer<MqttMessage>>>> {
 }
