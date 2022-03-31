@@ -1,4 +1,4 @@
-package top.futurenotfound.mqtt.client.client;
+package top.futurenotfound.mqtt.client;
 
 import org.eclipse.paho.mqttv5.client.*;
 import org.eclipse.paho.mqttv5.common.MqttException;
